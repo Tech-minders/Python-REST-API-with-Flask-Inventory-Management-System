@@ -2,6 +2,7 @@
 
 from flask import Flask, request, jsonify  
 from database import inventory, find_item_by_id, get_next_id 
+from external_api import fetch_product_by_barcode, search_product_by_name, format_api_product
 
 app = Flask(__name__) 
 
@@ -78,6 +79,35 @@ def delete_item(item_id):
     inventory.remove(item)
 
     return jsonify({"message": f"Item {item_id} deleted successfully"}), 200
+
+# GET /search/barcode/<barcode>
+
+@app.route("/search/barcode/<barcode>", methods=["GET"])
+def search_by_barcode(barcode):
+    api_product = fetch_product_by_barcode(barcode)
+
+    if api_product is None:
+        return jsonify({"error": "Product not found in OpenFoodFacts"}), 404
+
+    formatted = format_api_product(api_product)
+    formatted["id"] = get_next_id()
+    inventory.append(formatted)
+
+    return jsonify(formatted), 201
+
+# GET /search/name/<name>
+
+@app.route("/search/name/<product_name>", methods=["GET"])
+def search_by_name(product_name):
+    results = search_product_by_name(product_name)
+
+    if len(results) == 0:
+        return jsonify({"message": "No products found", "results": []}), 200
+
+    # Format each result before returning
+    formatted_results = [format_api_product(p) for p in results]
+
+    return jsonify({"count": len(formatted_results), "results": formatted_results}), 200
 
 
 if __name__ == "__main__":
